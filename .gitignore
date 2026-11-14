@@ -1,0 +1,30 @@
+# Secrets
+.env
+.env.local
+*.pem
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+dist/
+build/
+
+# Seed review artifacts (regenerated)
+scripts/output/
+docs/_script_extract.txt
+docs/_directory_extract.txt
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# LiveKit
+*.log

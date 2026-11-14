@@ -1,0 +1,32 @@
+# Non-secret defaults (overridable via .env). Easy to change when client answers
+# docs/OPEN_QUESTIONS.md.
+
+[agent]
+display_name = "Alex"
+agent_name = "mvcap-receptionist"
+
+[providers]
+stt = "deepgram"
+llm = "openai"
+tts = "cartesia"
+
+[hours]
+timezone = "America/New_York"
+# Monday–Friday
+start = "08:00"
+end = "16:30"
+lunch_start = "12:00"
+lunch_end = "13:00"
+# Holiday calendar not yet provided by client
+holidays = []
+
+[transfer]
+# Open question #5 — change when client confirms PBX format
+mode = "sip_uri"  # sip_uri | main_plus_ext | did
+sip_domain = ""
+main_number = ""
+
+[fallback]
+website = "https://www.miamivalleycap.org"
+helplink = "211"
+no_extension = "main_line"
