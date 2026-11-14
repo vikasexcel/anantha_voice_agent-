@@ -16,7 +16,8 @@ dist/
 build/
 
 # Seed review artifacts (regenerated)
-scripts/output/
+scripts/output/*
+!scripts/output/.gitkeep
 docs/_script_extract.txt
 docs/_directory_extract.txt
 
