@@ -38,14 +38,21 @@ tests/                 Seed + (later) routing tests
 Requires **Python 3.11** (3.14 is too new for `onnxruntime` / Silero VAD).
 
 ```bash
-/usr/local/bin/python3.11 -m venv .venv   # or any 3.11+
+/usr/local/bin/python3.11 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
-# fill LIVEKIT_*, DEEPGRAM_API_KEY, OPENAI_API_KEY, CARTESIA_API_KEY (or chosen providers)
-
-python -m agent.main dev
 ```
+
+Edit `.env` and set at least `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, and `OPENAI_API_KEY`.
+Defaults use **OpenAI for STT + LLM + TTS** (`STT_PROVIDER` / `LLM_PROVIDER` / `TTS_PROVIDER=openai`).
+
+```bash
+source .venv/bin/activate
+python -m agent.main start
+```
+
+`dev` still works but LiveKit now warns it is deprecated in favor of `lk agent dev`.
 
 Inbound SIP calls dispatched to agent name `mvcap-receptionist` should hear:
 
@@ -78,9 +85,10 @@ Exact portal clicks vary; use LiveKit Cloud SIP docs and Telnyx SIP trunk docs f
 
 ```bash
 python scripts/seed_from_docs.py --dry-run
-# review scripts/output/seed_review.json and flagged ambiguities
 python scripts/seed_from_docs.py --apply
 ```
+
+Review `scripts/output/seed_review.json` after the dry-run before applying.
 
 4. Run tests:
 

@@ -1,12 +1,15 @@
 # LiveKit Agents + SIP
+# Default voice stack uses LiveKit Inference (STT/TTS/LLM) — no extra provider keys.
 livekit>=1.0.0
 livekit-agents~=1.8.0
-livekit-plugins-deepgram~=1.8.0
+livekit-plugins-silero~=1.8.0
+livekit-plugins-turn-detector~=1.8.0
+# Optional: PROVIDER_MODE=openai_direct
 livekit-plugins-openai~=1.8.0
+livekit-plugins-deepgram~=1.8.0
 livekit-plugins-anthropic~=1.8.0
 livekit-plugins-cartesia~=1.8.0
 livekit-plugins-elevenlabs~=1.8.0
-livekit-plugins-silero~=1.8.0
 
 # Data
 supabase>=2.0.0

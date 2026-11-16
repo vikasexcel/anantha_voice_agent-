@@ -1,4 +1,4 @@
-"""Build STT / LLM / TTS plugins from env-configurable providers."""
+"""Build STT / LLM / TTS from config (LiveKit Inference or direct plugins)."""
 
 from __future__ import annotations
 
@@ -7,44 +7,100 @@ from typing import Any
 from agent.config import Settings
 
 
-def build_stt(settings: Settings) -> Any:
-    provider = settings.stt_provider
-    if provider == "deepgram":
-        from livekit.plugins import deepgram
+def build_stt(settings: Settings, *, keyterms: list[str] | None = None) -> Any:
+    if settings.provider_mode == "livekit_inference":
+        from livekit.agents import inference
 
-        return deepgram.STT(model=settings.stt_model)
-    raise ValueError(f"Unsupported STT_PROVIDER: {provider}")
+        extra: dict[str, Any] = {}
+        if keyterms:
+            # Deepgram nova-3 keyterm biasing (Inference DeepgramOptions)
+            extra["keyterm"] = keyterms[:100]
+        return inference.STT(
+            model=settings.stt_model,
+            language=settings.stt_language,
+            extra_kwargs=extra,
+        )
+
+    # openai_direct fallback
+    from livekit.plugins import openai
+
+    model = settings.stt_model or "gpt-4o-transcribe"
+    if model.startswith("nova") or "/" in model:
+        model = "gpt-4o-transcribe"
+    return openai.STT(model=model, language=settings.stt_language or "en")
 
 
 def build_llm(settings: Settings) -> Any:
-    provider = settings.llm_provider
-    if provider == "openai":
-        from livekit.plugins import openai
+    if settings.provider_mode == "livekit_inference":
+        from livekit.agents import inference
 
-        return openai.LLM(model=settings.llm_model)
-    if provider == "anthropic":
-        from livekit.plugins import anthropic
+        extra: dict[str, Any] = {
+            "temperature": settings.llm_temperature,
+            "max_completion_tokens": settings.llm_max_tokens,
+        }
+        return inference.LLM(model=settings.llm_model, extra_kwargs=extra)
 
-        return anthropic.LLM(model=settings.llm_model or "claude-sonnet-4-5")
-    raise ValueError(f"Unsupported LLM_PROVIDER: {provider}")
+    from livekit.plugins import openai
+
+    model = settings.llm_model
+    if "/" in model:
+        model = model.split("/", 1)[-1]
+    return openai.LLM(
+        model=model or "gpt-4o-mini",
+        temperature=settings.llm_temperature,
+        max_completion_tokens=settings.llm_max_tokens,
+    )
 
 
 def build_tts(settings: Settings) -> Any:
-    provider = settings.tts_provider
-    if provider == "cartesia":
-        from livekit.plugins import cartesia
+    if settings.provider_mode == "livekit_inference":
+        from livekit.agents import inference
 
-        kwargs: dict[str, Any] = {}
-        if settings.tts_model:
-            kwargs["model"] = settings.tts_model
-        if settings.tts_voice:
-            kwargs["voice"] = settings.tts_voice
-        return cartesia.TTS(**kwargs)
-    if provider in {"elevenlabs", "eleven"}:
-        from livekit.plugins import elevenlabs
+        extra: dict[str, Any] = {}
+        if settings.tts_emotion:
+            extra["emotion"] = settings.tts_emotion
+        return inference.TTS(
+            model=settings.tts_model,
+            voice=settings.tts_voice,
+            language=settings.tts_language or "en",
+            extra_kwargs=extra,
+        )
 
-        kwargs = {}
-        if settings.tts_voice:
-            kwargs["voice_id"] = settings.tts_voice
-        return elevenlabs.TTS(**kwargs)
-    raise ValueError(f"Unsupported TTS_PROVIDER: {provider}")
+    from livekit.plugins import openai
+
+    kwargs: dict[str, Any] = {
+        "model": "gpt-4o-mini-tts",
+        "voice": settings.tts_voice or "marin",
+    }
+    if settings.tts_instructions:
+        kwargs["instructions"] = settings.tts_instructions
+    return openai.TTS(**kwargs)
+
+
+def build_turn_detector(settings: Settings) -> Any:
+    """LiveKit turn detector (preferred) or VAD-only."""
+    mode = settings.turn_detector
+    if mode == "vad":
+        return "vad"
+    if mode == "multilingual_plugin":
+        from livekit.plugins.turn_detector.multilingual import MultilingualModel
+
+        return MultilingualModel()
+    # Default: Inference TurnDetector (cloud v1). Skip local mini preload (~450MB)
+    # so worker processes initialize within the default timeout on laptops.
+    from livekit.agents import inference
+
+    return inference.TurnDetector(
+        version=settings.turn_detector_version,  # type: ignore[arg-type]
+        local_fallback=False,
+    )
+
+
+def stt_tts_descriptor(settings: Settings) -> str:
+    """Human-readable stack for logs (no secrets)."""
+    return (
+        f"mode={settings.provider_mode} "
+        f"stt={settings.stt_model}:{settings.stt_language} "
+        f"llm={settings.llm_model} "
+        f"tts={settings.tts_model}:{settings.tts_voice[:8]}…"
+    )

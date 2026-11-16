@@ -1,28 +1,53 @@
-# Non-secret defaults (overridable via .env). Easy to change when client answers
-# docs/OPEN_QUESTIONS.md.
+# Non-secret defaults (overridable via .env).
 
 [agent]
 display_name = "Alex"
 agent_name = "mvcap-receptionist"
 
+# livekit_inference = STT/TTS/LLM via LiveKit Cloud (no Deepgram/Cartesia keys needed)
+# openai_direct = previous OpenAI-plugin STT/LLM/TTS path
 [providers]
-stt = "deepgram"
-llm = "openai"
-tts = "cartesia"
+mode = "livekit_inference"
+
+[stt]
+# Streaming English STT on LiveKit Inference
+model = "deepgram/nova-3"
+language = "en"
+
+[llm]
+# LiveKit Inference OpenAI model (lower hop latency vs direct OpenAI for many regions)
+model = "openai/gpt-4.1-mini"
+temperature = 0.3
+max_tokens = 72
+
+[tts]
+# Cartesia Sonic 3 via LiveKit Inference — Jacqueline (confident young American female)
+model = "cartesia/sonic-3"
+voice = "9626c31c-bec5-4cca-baa8-f8ba9e84c8bc"
+language = "en"
+# Cartesia emotion hint (calm receptionist)
+emotion = "calm"
+
+[turn]
+min_endpointing_delay = 0.35
+max_endpointing_delay = 1.8
+min_interruption_duration = 0.3
+allow_interruptions = true
+preemptive_generation = true
+# LiveKit Inference audio turn detector (multilingual / v1)
+turn_detector = "inference"  # inference | multilingual_plugin | vad
+turn_detector_version = "v1"
 
 [hours]
 timezone = "America/New_York"
-# Monday–Friday
 start = "08:00"
 end = "16:30"
 lunch_start = "12:00"
 lunch_end = "13:00"
-# Holiday calendar not yet provided by client
 holidays = []
 
 [transfer]
-# Open question #5 — change when client confirms PBX format
-mode = "sip_uri"  # sip_uri | main_plus_ext | did
+mode = "sip_uri"
 sip_domain = ""
 main_number = ""
 

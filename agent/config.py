@@ -1,14 +1,35 @@
-"""Runtime configuration from environment. No secrets hardcoded."""
+"""Runtime configuration from environment + config/defaults.toml. No secrets hardcoded."""
 
 from __future__ import annotations
 
 import os
 from dataclasses import dataclass
 from functools import lru_cache
+from pathlib import Path
 
 from dotenv import load_dotenv
 
 load_dotenv()
+
+ROOT = Path(__file__).resolve().parents[1]
+DEFAULTS_PATH = ROOT / "config" / "defaults.toml"
+
+_DEFAULT_TTS_INSTRUCTIONS = (
+    "Speak like a warm, polished front-desk receptionist at a professional firm. "
+    "Calm, confident, friendly, natural pacing, clear pronunciation. "
+    "Short sentences. No robotic or exaggerated tone."
+)
+
+
+def _load_toml_defaults() -> dict:
+    if not DEFAULTS_PATH.exists():
+        return {}
+    try:
+        import tomllib
+    except ModuleNotFoundError:  # pragma: no cover
+        return {}
+    with DEFAULTS_PATH.open("rb") as f:
+        return tomllib.load(f)
 
 
 def _req(name: str) -> str:
@@ -22,19 +43,44 @@ def _opt(name: str, default: str = "") -> str:
     return os.getenv(name, default).strip() or default
 
 
+def _opt_float(name: str, default: float) -> float:
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return default
+    return float(raw)
+
+
+def _opt_bool(name: str, default: bool) -> bool:
+    raw = os.getenv(name, "").strip().lower()
+    if not raw:
+        return default
+    return raw in {"1", "true", "yes", "on"}
+
+
 @dataclass(frozen=True)
 class Settings:
     livekit_url: str
     livekit_api_key: str
     livekit_api_secret: str
     agent_display_name: str
-    stt_provider: str
-    llm_provider: str
-    tts_provider: str
+    provider_mode: str
     stt_model: str
+    stt_language: str
     llm_model: str
+    llm_temperature: float
+    llm_max_tokens: int
     tts_model: str
     tts_voice: str
+    tts_language: str
+    tts_emotion: str
+    tts_instructions: str
+    min_endpointing_delay: float
+    max_endpointing_delay: float
+    min_interruption_duration: float
+    allow_interruptions: bool
+    preemptive_generation: bool
+    turn_detector: str
+    turn_detector_version: str
     supabase_url: str
     supabase_service_role_key: str
     transfer_mode: str
@@ -62,7 +108,13 @@ class Settings:
 
 @lru_cache(maxsize=1)
 def get_settings(*, require_livekit: bool = True, require_supabase: bool = False) -> Settings:
-    """Load settings. Phase 1 only needs LiveKit; Supabase required from Phase 2+."""
+    defaults = _load_toml_defaults()
+    agent_cfg = defaults.get("agent", {})
+    providers = defaults.get("providers", {})
+    stt_cfg = defaults.get("stt", {})
+    llm_cfg = defaults.get("llm", {})
+    tts_cfg = defaults.get("tts", {})
+    turn_cfg = defaults.get("turn", {})
 
     livekit_url = _req("LIVEKIT_URL") if require_livekit else _opt("LIVEKIT_URL")
     livekit_api_key = _req("LIVEKIT_API_KEY") if require_livekit else _opt("LIVEKIT_API_KEY")
@@ -80,14 +132,59 @@ def get_settings(*, require_livekit: bool = True, require_supabase: bool = False
         livekit_url=livekit_url,
         livekit_api_key=livekit_api_key,
         livekit_api_secret=livekit_api_secret,
-        agent_display_name=_opt("AGENT_DISPLAY_NAME", "Alex"),
-        stt_provider=_opt("STT_PROVIDER", "deepgram").lower(),
-        llm_provider=_opt("LLM_PROVIDER", "openai").lower(),
-        tts_provider=_opt("TTS_PROVIDER", "cartesia").lower(),
-        stt_model=_opt("STT_MODEL", "nova-3"),
-        llm_model=_opt("LLM_MODEL", "gpt-4o-mini"),
-        tts_model=_opt("TTS_MODEL", ""),
-        tts_voice=_opt("TTS_VOICE", ""),
+        agent_display_name=_opt(
+            "AGENT_DISPLAY_NAME", agent_cfg.get("display_name", "Alex")
+        ),
+        provider_mode=_opt(
+            "PROVIDER_MODE", providers.get("mode", "livekit_inference")
+        ).lower(),
+        stt_model=_opt("STT_MODEL", stt_cfg.get("model", "deepgram/nova-3")),
+        stt_language=_opt("STT_LANGUAGE", stt_cfg.get("language", "en")),
+        llm_model=_opt("LLM_MODEL", llm_cfg.get("model", "openai/gpt-4.1-mini")),
+        llm_temperature=_opt_float(
+            "LLM_TEMPERATURE", float(llm_cfg.get("temperature", 0.3))
+        ),
+        llm_max_tokens=int(
+            _opt_float("LLM_MAX_TOKENS", float(llm_cfg.get("max_tokens", 72)))
+        ),
+        tts_model=_opt("TTS_MODEL", tts_cfg.get("model", "cartesia/sonic-3")),
+        tts_voice=_opt(
+            "TTS_VOICE",
+            tts_cfg.get("voice", "9626c31c-bec5-4cca-baa8-f8ba9e84c8bc"),
+        ),
+        tts_language=_opt("TTS_LANGUAGE", tts_cfg.get("language", "en")),
+        tts_emotion=_opt("TTS_EMOTION", tts_cfg.get("emotion", "calm")),
+        tts_instructions=_opt(
+            "TTS_INSTRUCTIONS",
+            tts_cfg.get("instructions", _DEFAULT_TTS_INSTRUCTIONS),
+        ),
+        min_endpointing_delay=_opt_float(
+            "MIN_ENDPOINTING_DELAY",
+            float(turn_cfg.get("min_endpointing_delay", 0.35)),
+        ),
+        max_endpointing_delay=_opt_float(
+            "MAX_ENDPOINTING_DELAY",
+            float(turn_cfg.get("max_endpointing_delay", 1.8)),
+        ),
+        min_interruption_duration=_opt_float(
+            "MIN_INTERRUPTION_DURATION",
+            float(turn_cfg.get("min_interruption_duration", 0.3)),
+        ),
+        allow_interruptions=_opt_bool(
+            "ALLOW_INTERRUPTIONS",
+            bool(turn_cfg.get("allow_interruptions", True)),
+        ),
+        preemptive_generation=_opt_bool(
+            "PREEMPTIVE_GENERATION",
+            bool(turn_cfg.get("preemptive_generation", True)),
+        ),
+        turn_detector=_opt(
+            "TURN_DETECTOR", turn_cfg.get("turn_detector", "inference")
+        ).lower(),
+        turn_detector_version=_opt(
+            "TURN_DETECTOR_VERSION",
+            str(turn_cfg.get("turn_detector_version", "v1")),
+        ),
         supabase_url=supabase_url,
         supabase_service_role_key=supabase_key,
         transfer_mode=_opt("TRANSFER_MODE", "sip_uri").lower(),
